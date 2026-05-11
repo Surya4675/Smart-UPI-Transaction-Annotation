@@ -1,13 +1,18 @@
 package com.example.smartupiannotation.utils
 
+import android.Manifest
+import android.app.Activity
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 
 object PermissionUtils {
 
@@ -20,6 +25,7 @@ object PermissionUtils {
                 context.packageName
             )
         } else {
+            @Suppress("DEPRECATION")
             appOps.checkOpNoThrow(
                 AppOpsManager.OPSTR_GET_USAGE_STATS,
                 Process.myUid(),
@@ -36,6 +42,21 @@ object PermissionUtils {
     fun isNotificationListenerEnabled(context: Context): Boolean {
         val packageNames = NotificationManagerCompat.getEnabledListenerPackages(context)
         return packageNames.contains(context.packageName)
+    }
+
+    fun hasContactsPermission(context: Context): Boolean {
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_CONTACTS
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    fun requestContactsPermission(activity: Activity, requestCode: Int) {
+        ActivityCompat.requestPermissions(
+            activity,
+            arrayOf(Manifest.permission.READ_CONTACTS),
+            requestCode
+        )
     }
 
     fun openUsageStatsSettings(context: Context) {
@@ -56,5 +77,12 @@ object PermissionUtils {
         context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         })
+    }
+
+    fun allPermissionsGranted(context: Context): Boolean {
+        return hasUsageStatsPermission(context) &&
+                hasOverlayPermission(context) &&
+                isNotificationListenerEnabled(context) &&
+                hasContactsPermission(context)
     }
 }

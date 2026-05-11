@@ -1,42 +1,68 @@
 package com.example.smartupiannotation.service
 
 import android.content.Intent
+import android.os.IBinder
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.example.smartupiannotation.service.parser.TransactionParser
+import com.example.smartupiannotation.utils.AppUsageMonitor
 
 class UpiNotificationListener : NotificationListenerService() {
 
-    private val upiApps = setOf(
-        "com.google.android.apps.nbu.paisa.user", // GPay
-        "com.phonepe.app",                       // PhonePe
-        "net.one97.paytm"                        // Paytm
+    private val TAG = "UpiNotificationListener"
+    private lateinit var usageMonitor: AppUsageMonitor
+
+    private val SMS_PACKAGES = setOf(
+        "com.google.android.apps.messaging",
+        "com.android.mms",
+        "com.samsung.android.messaging"
     )
+
+    override fun onCreate() {
+        super.onCreate()
+        usageMonitor = AppUsageMonitor(this)
+    }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
         
-        val packageName = sbn?.packageName ?: return
-        if (!upiApps.contains(packageName)) return
-
+        val notificationPackage = sbn?.packageName ?: return
         val extras = sbn.notification.extras
-        val title = extras.getString("android.title")
-        val text = extras.getCharSequence("android.text")?.toString()
+        val title = extras.getString("android.title") ?: ""
+        val text = extras.getCharSequence("android.text")?.toString() ?: ""
+        val fullText = "$title $text"
 
-        Log.d("UpiListener", "Notification from $packageName: $title - $text")
+        Log.d(TAG, "Notification from $notificationPackage: $fullText")
 
-        val parsedTransaction = TransactionParser.parseNotification(title, text)
+        val parsedData = TransactionParser.parse(fullText)
         
-        if (parsedTransaction != null) {
-            // Trigger the overlay service. 
-            // In a real app, we might wait for the user to exit the UPI app using AppUsageMonitor.
+        if (parsedData != null) {
+            Log.d(TAG, "Parsed Transaction: $parsedData")
+            
+            var packageToMonitor = notificationPackage
+            
+            if (SMS_PACKAGES.contains(notificationPackage)) {
+                val foregroundApp = usageMonitor.getForegroundPackage()
+                if (foregroundApp != null && foregroundApp != notificationPackage) {
+                    Log.d(TAG, "SMS notification detected. Switching monitor target to active app: $foregroundApp")
+                    packageToMonitor = foregroundApp
+                }
+            }
+
             val intent = Intent(this, OverlayForegroundService::class.java).apply {
-                putExtra("amount", parsedTransaction.amount)
-                putExtra("receiver", parsedTransaction.receiverName)
-                putExtra("upi_package", packageName)
+                action = OverlayForegroundService.ACTION_START_MONITORING
+                putExtra("amount", parsedData.amount)
+                putExtra("receiver", parsedData.receiverName)
+                putExtra("bankName", parsedData.bankName)
+                putExtra("account", parsedData.maskedAccount)
+                putExtra("upiPackage", packageToMonitor)
             }
             startForegroundService(intent)
         }
+    }
+
+    override fun onBind(intent: Intent?): IBinder? {
+        return super.onBind(intent)
     }
 }

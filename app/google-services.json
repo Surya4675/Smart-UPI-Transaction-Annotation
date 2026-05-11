@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "895157786071",
+    "project_id": "smartupi-84bb6",
+    "storage_bucket": "smartupi-84bb6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:895157786071:android:fd4936df0b0133e0122792",
+        "android_client_info": {
+          "package_name": "com.example.smartupiannotation"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDsWmUxUD-jjHR1FAsRYp80hup1n7TWLtg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -5,7 +5,7 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.example.smartupiannotation.data.local.entity.TransactionWithParticipants
+import com.example.smartupiannotation.data.local.TransactionWithParticipants
 import com.example.smartupiannotation.databinding.ItemTransactionBinding
 import java.text.SimpleDateFormat
 import java.util.*

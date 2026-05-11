@@ -9,6 +9,7 @@
         tools:node="replace" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <application
         android:allowBackup="true"
@@ -21,13 +22,17 @@
         android:theme="@style/Theme.SmartUPIAnnotation">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".ui.setup.AuthActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="false" />
 
         <activity 
             android:name=".ui.setup.SetupActivity"
@@ -37,6 +42,7 @@
         <activity 
             android:name=".ui.dashboard.AddTransactionActivity"
             android:label="Add Transaction"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false" />
 
         <!-- Notification Listener Service -->
@@ -53,6 +59,7 @@
         <!-- Foreground Service for Overlay -->
         <service
             android:name=".service.OverlayForegroundService"
+            android:theme="@style/Theme.SmartUPIAnnotation"
             android:foregroundServiceType="specialUse"
             android:exported="false" />
 

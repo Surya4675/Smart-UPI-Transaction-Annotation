@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Theme Colors (Dark values) -->
+    <color name="colorPrimary">#D0BCFF</color>
+    <color name="colorOnPrimary">#381E72</color>
+    <color name="colorPrimaryContainer">#4F378B</color>
+    <color name="colorOnPrimaryContainer">#EADDFF</color>
+    <color name="colorSecondary">#CCC2DC</color>
+    <color name="colorOnSecondary">#332D41</color>
+    <color name="colorSecondaryContainer">#4A4458</color>
+    <color name="colorOnSecondaryContainer">#E8DEF8</color>
+    <color name="colorBackground">#1C1B1F</color>
+    <color name="colorOnBackground">#E6E1E5</color>
+    <color name="colorSurface">#1C1B1F</color>
+    <color name="colorOnSurface">#E6E1E5</color>
+    <color name="colorSurfaceVariant">#49454F</color>
+    <color name="colorOnSurfaceVariant">#CAC4D0</color>
+    <color name="colorOutline">#938F99</color>
+    <color name="colorError">#F2B8B5</color>
+    <color name="colorOnError">#601410</color>
+</resources>

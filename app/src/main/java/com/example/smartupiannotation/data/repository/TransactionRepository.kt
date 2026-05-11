@@ -1,34 +1,29 @@
 package com.example.smartupiannotation.data.repository
 
-import com.example.smartupiannotation.data.local.dao.ParticipantDao
-import com.example.smartupiannotation.data.local.dao.TransactionDao
-import com.example.smartupiannotation.data.local.entity.ParticipantEntity
-import com.example.smartupiannotation.data.local.entity.TransactionEntity
-import com.example.smartupiannotation.data.local.entity.TransactionWithParticipants
+import com.example.smartupiannotation.data.local.ParticipantEntity
+import com.example.smartupiannotation.data.local.TransactionDao
+import com.example.smartupiannotation.data.local.TransactionEntity
+import com.example.smartupiannotation.data.local.TransactionWithParticipants
 import kotlinx.coroutines.flow.Flow
 
-class TransactionRepository(
-    private val transactionDao: TransactionDao,
-    private val participantDao: ParticipantDao
-) {
+class TransactionRepository(private val transactionDao: TransactionDao) {
+
     val allTransactions: Flow<List<TransactionWithParticipants>> = 
         transactionDao.getAllTransactionsWithParticipants()
 
     suspend fun insertTransaction(transaction: TransactionEntity, participants: List<ParticipantEntity>) {
-        val transactionId = transactionDao.insertTransaction(transaction)
-        // If updating, delete existing participants first
-        if (transaction.transactionId != 0L) {
-            participantDao.deleteParticipantsForTransaction(transaction.transactionId)
-        }
-        val participantsWithOwner = participants.map { it.copy(transactionOwnerId = transactionId) }
-        participantDao.insertParticipants(participantsWithOwner)
+        transactionDao.insertTransactionWithParticipants(transaction, participants)
     }
 
     suspend fun getTransactionById(id: Long): TransactionWithParticipants? {
-        return transactionDao.getTransactionById(id)
+        return transactionDao.getTransactionWithParticipantsById(id)
     }
 
     suspend fun deleteTransaction(transaction: TransactionEntity) {
         transactionDao.deleteTransaction(transaction)
+    }
+
+    suspend fun updateTransaction(transaction: TransactionEntity) {
+        transactionDao.updateTransaction(transaction)
     }
 }

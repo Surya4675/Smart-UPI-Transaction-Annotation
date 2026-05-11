@@ -4,16 +4,10 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import com.example.smartupiannotation.data.local.dao.ParticipantDao
-import com.example.smartupiannotation.data.local.dao.TransactionDao
-import com.example.smartupiannotation.data.local.entity.ParticipantEntity
-import com.example.smartupiannotation.data.local.entity.TransactionEntity
 
 @Database(entities = [TransactionEntity::class, ParticipantEntity::class], version = 1, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
-
     abstract fun transactionDao(): TransactionDao
-    abstract fun participantDao(): ParticipantDao
 
     companion object {
         @Volatile
@@ -24,7 +18,7 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "upi_annotation_db"
+                    "upi_transaction_db"
                 ).build()
                 INSTANCE = instance
                 instance

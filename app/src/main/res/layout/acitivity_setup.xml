@@ -32,7 +32,6 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="32dp"
         android:text="1. Grant Notification Access"
-        app:icon="@drawable/ic_notifications"
         app:layout_constraintTop_toBottomOf="@id/tvSetupSubtitle" />
 
     <com.google.android.material.button.MaterialButton
@@ -41,7 +40,6 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:text="2. Allow Display Over Other Apps"
-        app:icon="@drawable/ic_overlay"
         app:layout_constraintTop_toBottomOf="@id/btnNotificationPermission" />
 
     <com.google.android.material.button.MaterialButton
@@ -50,8 +48,15 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:text="3. Grant Usage Access (Detect App Exit)"
-        app:icon="@drawable/ic_analytics"
         app:layout_constraintTop_toBottomOf="@id/btnOverlayPermission" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnContactsPermission"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="4. Allow Access to Contacts (Autocomplete)"
+        app:layout_constraintTop_toBottomOf="@id/btnUsagePermission" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnContinue"
