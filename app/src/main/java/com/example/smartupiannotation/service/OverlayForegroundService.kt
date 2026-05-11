@@ -8,7 +8,6 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import com.example.smartupiannotation.MainActivity
 import com.example.smartupiannotation.R
 import com.example.smartupiannotation.data.local.AppDatabase
@@ -25,7 +24,7 @@ class OverlayForegroundService : Service() {
     companion object {
         const val TAG = "OverlayService"
         const val CHANNEL_ID = "OverlayServiceChannel"
-        const val NOTIFICATION_ID = 1001 // Unique ID
+        const val NOTIFICATION_ID = 1001
         const val ACTION_START_MONITORING = "ACTION_START_MONITORING"
 
         private val UPI_PACKAGES = setOf(
@@ -58,21 +57,16 @@ class OverlayForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "Service onCreate")
         overlayManager = OverlayManager(this)
         val database = AppDatabase.getDatabase(this)
         repository = TransactionRepository(database.transactionDao())
         usageMonitor = AppUsageMonitor(this)
         syncManager = SyncManager(database.transactionDao())
         createNotificationChannel()
-        
-        // Start foreground immediately in onCreate for better stability
         startForeground(NOTIFICATION_ID, createNotification("Smart UPI: Monitoring transaction status..."))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "onStartCommand action: ${intent?.action}")
-
         if (intent?.action == ACTION_START_MONITORING) {
             val amount = intent.getDoubleExtra("amount", 0.0)
             val receiver = intent.getStringExtra("receiver") ?: "Unknown"
@@ -80,14 +74,13 @@ class OverlayForegroundService : Service() {
             val account = intent.getStringExtra("account")
 
             if (isMonitoring || overlayManager.isOverlayVisible()) {
-                Log.d(TAG, "Already active. Ignoring duplicate request.")
+                Log.d(TAG, "Already active or overlay visible. Ignoring.")
                 return START_STICKY
             }
 
             isMonitoring = true
             monitorAppExit(upiPackage, amount, receiver, account)
         }
-        
         return START_STICKY
     }
 
@@ -98,74 +91,78 @@ class OverlayForegroundService : Service() {
 
     private fun monitorAppExit(packageHint: String, amount: Double, receiver: String, account: String?) {
         serviceScope.launch {
-            Log.d(TAG, "Phase 1: Waiting for user to enter UPI app ($packageHint)")
+            // Optimization: Check if user was ALREADY in a UPI app very recently (last 30s)
+            val searchPackages = if (packageHint.isNotEmpty()) UPI_PACKAGES + packageHint else UPI_PACKAGES
+            val wasRecentlyInUpi = usageMonitor.wasAnyAppInForegroundRecently(searchPackages, 30000L)
+
+            var hasEnteredUpi = wasRecentlyInUpi
             
-            var hasEnteredUpi = false
-            val entryTimeout = 60000L // 1 minute to enter
-            val entryStartTime = System.currentTimeMillis()
-            
-            // Step 1: Wait for entry
-            while (System.currentTimeMillis() - entryStartTime < entryTimeout) {
-                val currentApp = usageMonitor.getForegroundPackage()
-                if (currentApp != null && (UPI_PACKAGES.contains(currentApp) || currentApp == packageHint)) {
-                    hasEnteredUpi = true
-                    Log.d(TAG, "Phase 1 Complete: User is in UPI app")
-                    break
+            if (!hasEnteredUpi) {
+                Log.d(TAG, "Phase 1: Waiting for user to enter UPI app")
+                val entryTimeout = 45000L // Reduced timeout
+                val entryStartTime = System.currentTimeMillis()
+                
+                while (System.currentTimeMillis() - entryStartTime < entryTimeout) {
+                    val currentApp = usageMonitor.getForegroundPackage()
+                    if (currentApp != null && (UPI_PACKAGES.contains(currentApp) || currentApp == packageHint)) {
+                        hasEnteredUpi = true
+                        Log.d(TAG, "Phase 1 Complete: User entered UPI app")
+                        break
+                    }
+                    delay(800) // Faster polling
                 }
-                delay(1000)
+            } else {
+                Log.d(TAG, "Phase 1 Skipped: User was recently in UPI app")
             }
 
             if (!hasEnteredUpi) {
-                Log.d(TAG, "Phase 1 Timeout: User never entered UPI app")
+                Log.d(TAG, "Phase 1 Timeout: No UPI activity detected")
                 isMonitoring = false
                 stopSelf()
                 return@launch
             }
 
-            // Step 2: Once entered, wait for confirmed exit (3 consecutive seconds)
-            Log.d(TAG, "Phase 2: Waiting for exit from UPI app")
+            // Phase 2: Wait for exit
+            Log.d(TAG, "Phase 2: Monitoring for exit")
             var exitConfirmedCount = 0
-            val requiredConfirmations = 3 
+            val requiredConfirmations = 1 // Immediate show on first non-UPI/non-interrupter detection
             var retries = 0
-            val maxRetries = 300 // 5 minutes total monitoring
+            val maxRetries = 200 // ~3 minutes
 
             while (exitConfirmedCount < requiredConfirmations && retries < maxRetries) {
                 val currentApp = usageMonitor.getForegroundPackage()
                 
-                // Skip transient interrupter apps (Notifications, System UI)
+                // If we can't determine app or it's an interrupter, just wait
                 if (currentApp == null || INTERRUPTER_PACKAGES.any { currentApp.contains(it) }) {
-                    delay(1000)
+                    delay(800)
                     retries++
                     continue
                 }
 
-                val isInUpi = currentApp != null && (UPI_PACKAGES.contains(currentApp) || currentApp == packageHint)
+                val isInUpi = UPI_PACKAGES.contains(currentApp) || currentApp == packageHint
 
                 if (!isInUpi) {
                     exitConfirmedCount++
                 } else {
-                    exitConfirmedCount = 0 // User is still active in UPI
+                    exitConfirmedCount = 0 
                 }
 
-                delay(1000)
+                delay(800)
                 retries++
             }
 
             isMonitoring = false
             if (exitConfirmedCount >= requiredConfirmations) {
-                Log.d(TAG, "Phase 2 Complete: Exit confirmed. Showing persistent overlay.")
+                Log.d(TAG, "Phase 2 Complete: Exit detected. Showing overlay.")
                 showOverlay(amount, receiver, account)
             } else {
-                Log.d(TAG, "Phase 2 Cancelled: Monitoring timed out.")
-                if (!overlayManager.isOverlayVisible()) {
-                    stopSelf()
-                }
+                Log.d(TAG, "Phase 2 Timeout.")
+                if (!overlayManager.isOverlayVisible()) stopSelf()
             }
         }
     }
 
     private fun showOverlay(amount: Double, receiver: String, account: String?) {
-        // Update notification to indicate user action is needed
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         manager?.notify(NOTIFICATION_ID, createNotification("Transaction annotation required - tap to open"))
 
@@ -176,7 +173,7 @@ class OverlayForegroundService : Service() {
                 saveTransaction(finalAmount, finalReceiver, account, note, participants)
             },
             onDismiss = {
-                Log.d(TAG, "Overlay dismissed by user")
+                Log.d(TAG, "Overlay dismissed")
                 stopSelf()
             }
         )
@@ -195,9 +192,8 @@ class OverlayForegroundService : Service() {
                 )
                 repository.insertTransaction(transaction, participants)
                 syncManager.saveToCloud(transaction, participants)
-                Log.d(TAG, "Transaction saved successfully")
             } catch (e: Exception) {
-                Log.e(TAG, "Error saving transaction", e)
+                Log.e(TAG, "Save error", e)
             } finally {
                 withContext(Dispatchers.Main) {
                     stopSelf()
@@ -221,7 +217,6 @@ class OverlayForegroundService : Service() {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(Notification.CATEGORY_SERVICE)
             .setOngoing(true)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
     }
 
@@ -231,10 +226,7 @@ class OverlayForegroundService : Service() {
                 CHANNEL_ID,
                 "UPI Transaction Monitoring",
                 NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Keeps the monitor active until you annotate the transaction"
-                setShowBadge(false)
-            }
+            )
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             manager?.createNotificationChannel(serviceChannel)
         }
@@ -242,7 +234,6 @@ class OverlayForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d(TAG, "Service onDestroy")
         serviceScope.cancel()
         overlayManager.cleanup()
     }

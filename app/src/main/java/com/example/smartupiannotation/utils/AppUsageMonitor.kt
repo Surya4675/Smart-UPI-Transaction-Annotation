@@ -14,17 +14,16 @@ class AppUsageMonitor(private val context: Context) {
      */
     fun isAppForeground(packageName: String): Boolean {
         val currentPackage = getForegroundPackage()
-        Log.d("AppUsageMonitor", "Target: $packageName, Current: $currentPackage")
         return currentPackage == packageName
     }
 
     /**
-     * Gets the package name of the app currently in the foreground using UsageEvents.
-     * This is generally more accurate than queryUsageStats for real-time monitoring.
+     * Gets the package name of the app currently in the foreground.
      */
     fun getForegroundPackage(): String? {
         val time = System.currentTimeMillis()
-        val usageEvents = usageStatsManager.queryEvents(time - 1000 * 60, time) // Check last 60 seconds
+        // Reduced window to 30 seconds for better performance
+        val usageEvents = usageStatsManager.queryEvents(time - 1000 * 30, time) 
         val event = UsageEvents.Event()
         var lastPackage: String? = null
 
@@ -36,7 +35,6 @@ class AppUsageMonitor(private val context: Context) {
         }
 
         if (lastPackage == null) {
-            // Fallback to queryUsageStats if no events found in last minute
             val stats = usageStatsManager.queryUsageStats(
                 UsageStatsManager.INTERVAL_DAILY,
                 time - 1000 * 60 * 5,
@@ -46,6 +44,25 @@ class AppUsageMonitor(private val context: Context) {
         }
 
         return lastPackage
+    }
+
+    /**
+     * Checks if any of the given packages were in the foreground in the last [durationMs].
+     */
+    fun wasAnyAppInForegroundRecently(packages: Set<String>, durationMs: Long): Boolean {
+        val time = System.currentTimeMillis()
+        val usageEvents = usageStatsManager.queryEvents(time - durationMs, time)
+        val event = UsageEvents.Event()
+
+        while (usageEvents.hasNextEvent()) {
+            usageEvents.getNextEvent(event)
+            if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                if (packages.contains(event.packageName)) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 
     fun hasUsageStatsPermission(): Boolean {
