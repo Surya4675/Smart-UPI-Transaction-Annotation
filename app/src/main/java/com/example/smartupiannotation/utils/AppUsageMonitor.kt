@@ -13,23 +13,24 @@ class AppUsageMonitor(private val context: Context) {
      * Checks if the specified package is currently in the foreground.
      */
     fun isAppForeground(packageName: String): Boolean {
-        val currentPackage = getForegroundPackage()
-        return currentPackage == packageName
+        return getForegroundPackage() == packageName
     }
 
     /**
      * Gets the package name of the app currently in the foreground.
+     * Uses a very small window (10s) for maximum speed.
      */
     fun getForegroundPackage(): String? {
         val time = System.currentTimeMillis()
-        // Reduced window to 30 seconds for better performance
-        val usageEvents = usageStatsManager.queryEvents(time - 1000 * 30, time) 
+        val usageEvents = usageStatsManager.queryEvents(time - 1000 * 10, time) 
         val event = UsageEvents.Event()
         var lastPackage: String? = null
 
         while (usageEvents.hasNextEvent()) {
             usageEvents.getNextEvent(event)
-            if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
+            // Catching both MOVE_TO_FOREGROUND and ACTIVITY_RESUMED for better compatibility
+            if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || 
+                event.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
                 lastPackage = event.packageName
             }
         }
@@ -37,7 +38,7 @@ class AppUsageMonitor(private val context: Context) {
         if (lastPackage == null) {
             val stats = usageStatsManager.queryUsageStats(
                 UsageStatsManager.INTERVAL_DAILY,
-                time - 1000 * 60 * 5,
+                time - 1000 * 60,
                 time
             )
             lastPackage = stats?.maxByOrNull { it.lastTimeUsed }?.packageName
@@ -56,7 +57,8 @@ class AppUsageMonitor(private val context: Context) {
 
         while (usageEvents.hasNextEvent()) {
             usageEvents.getNextEvent(event)
-            if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
+            if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || 
+                event.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
                 if (packages.contains(event.packageName)) {
                     return true
                 }
@@ -69,7 +71,7 @@ class AppUsageMonitor(private val context: Context) {
         val time = System.currentTimeMillis()
         val stats = usageStatsManager.queryUsageStats(
             UsageStatsManager.INTERVAL_DAILY,
-            time - 1000 * 10,
+            time - 1000 * 5,
             time
         )
         return !stats.isNullOrEmpty()

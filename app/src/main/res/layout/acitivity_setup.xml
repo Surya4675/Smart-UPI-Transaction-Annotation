@@ -38,24 +38,32 @@
         android:id="@+id/btnOverlayPermission"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         android:text="2. Allow Display Over Other Apps"
         app:layout_constraintTop_toBottomOf="@id/btnNotificationPermission" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnAccessibilityPermission"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="3. Enable Accessibility (Instant Detection)"
+        app:layout_constraintTop_toBottomOf="@id/btnOverlayPermission" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnUsagePermission"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="3. Grant Usage Access (Detect App Exit)"
-        app:layout_constraintTop_toBottomOf="@id/btnOverlayPermission" />
+        android:layout_marginTop="12dp"
+        android:text="4. Grant Usage Access (Backup Detection)"
+        app:layout_constraintTop_toBottomOf="@id/btnAccessibilityPermission" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnContactsPermission"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="4. Allow Access to Contacts (Autocomplete)"
+        android:layout_marginTop="12dp"
+        android:text="5. Allow Access to Contacts"
         app:layout_constraintTop_toBottomOf="@id/btnUsagePermission" />
 
     <com.google.android.material.button.MaterialButton

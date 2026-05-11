@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Smart UPI Annotation</string>
+    <string name="accessibility_service_description">This service monitors UPI transaction windows to help annotate and manage your transactions.</string>
 </resources>

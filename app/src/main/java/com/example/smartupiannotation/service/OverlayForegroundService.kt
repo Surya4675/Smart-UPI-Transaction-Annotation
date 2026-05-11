@@ -1,13 +1,16 @@
 package com.example.smartupiannotation.service
 
 import android.app.*
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.Configuration
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.smartupiannotation.MainActivity
 import com.example.smartupiannotation.R
 import com.example.smartupiannotation.data.local.AppDatabase
@@ -54,6 +57,18 @@ class OverlayForegroundService : Service() {
     private lateinit var usageMonitor: AppUsageMonitor
     private lateinit var syncManager: SyncManager
     private var isMonitoring = false
+    
+    private var pendingAmount: Double = 0.0
+    private var pendingReceiver: String = ""
+    private var pendingAccount: String? = null
+    private var monitoredUpiPackage: String = ""
+
+    private val appChangeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val packageName = intent?.getStringExtra(UpiAccessibilityService.EXTRA_PACKAGE_NAME) ?: return
+            handleAppChange(packageName)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -64,24 +79,59 @@ class OverlayForegroundService : Service() {
         syncManager = SyncManager(database.transactionDao())
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification("Smart UPI: Monitoring transaction status..."))
+        
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            appChangeReceiver, 
+            IntentFilter(UpiAccessibilityService.ACTION_APP_CHANGED)
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_START_MONITORING) {
-            val amount = intent.getDoubleExtra("amount", 0.0)
-            val receiver = intent.getStringExtra("receiver") ?: "Unknown"
-            val upiPackage = intent.getStringExtra("upiPackage") ?: ""
-            val account = intent.getStringExtra("account")
+            pendingAmount = intent.getDoubleExtra("amount", 0.0)
+            pendingReceiver = intent.getStringExtra("receiver") ?: "Unknown"
+            monitoredUpiPackage = intent.getStringExtra("upiPackage") ?: ""
+            pendingAccount = intent.getStringExtra("account")
 
             if (isMonitoring || overlayManager.isOverlayVisible()) {
-                Log.d(TAG, "Already active or overlay visible. Ignoring.")
+                Log.d(TAG, "Already active or overlay visible.")
                 return START_STICKY
             }
 
             isMonitoring = true
-            monitorAppExit(upiPackage, amount, receiver, account)
+            startMonitoringLogic()
         }
         return START_STICKY
+    }
+
+    private fun startMonitoringLogic() {
+        serviceScope.launch {
+            val searchPackages = if (monitoredUpiPackage.isNotEmpty()) UPI_PACKAGES + monitoredUpiPackage else UPI_PACKAGES
+            
+            // Initial check: if user is already out of UPI
+            val currentApp = usageMonitor.getForegroundPackage()
+            if (currentApp != null && !searchPackages.contains(currentApp) && !INTERRUPTER_PACKAGES.any { currentApp.contains(it) }) {
+                Log.d(TAG, "Instant Detection: User already exited UPI app. Showing overlay.")
+                triggerOverlay()
+            }
+        }
+    }
+
+    private fun handleAppChange(currentPackage: String) {
+        if (!isMonitoring) return
+
+        val searchPackages = if (monitoredUpiPackage.isNotEmpty()) UPI_PACKAGES + monitoredUpiPackage else UPI_PACKAGES
+
+        // If the user moves to a non-UPI app and it's not a system interrupter
+        if (!searchPackages.contains(currentPackage) && !INTERRUPTER_PACKAGES.any { currentPackage.contains(it) }) {
+            Log.d(TAG, "Accessibility Detection: User exited UPI app ($currentPackage). Showing overlay.")
+            triggerOverlay()
+        }
+    }
+
+    private fun triggerOverlay() {
+        isMonitoring = false
+        showOverlay(pendingAmount, pendingReceiver, pendingAccount)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -89,80 +139,9 @@ class OverlayForegroundService : Service() {
         overlayManager.refreshThemeIfVisible(newConfig)
     }
 
-    private fun monitorAppExit(packageHint: String, amount: Double, receiver: String, account: String?) {
-        serviceScope.launch {
-            // Optimization: Check if user was ALREADY in a UPI app very recently (last 30s)
-            val searchPackages = if (packageHint.isNotEmpty()) UPI_PACKAGES + packageHint else UPI_PACKAGES
-            val wasRecentlyInUpi = usageMonitor.wasAnyAppInForegroundRecently(searchPackages, 30000L)
-
-            var hasEnteredUpi = wasRecentlyInUpi
-            
-            if (!hasEnteredUpi) {
-                Log.d(TAG, "Phase 1: Waiting for user to enter UPI app")
-                val entryTimeout = 45000L // Reduced timeout
-                val entryStartTime = System.currentTimeMillis()
-                
-                while (System.currentTimeMillis() - entryStartTime < entryTimeout) {
-                    val currentApp = usageMonitor.getForegroundPackage()
-                    if (currentApp != null && (UPI_PACKAGES.contains(currentApp) || currentApp == packageHint)) {
-                        hasEnteredUpi = true
-                        Log.d(TAG, "Phase 1 Complete: User entered UPI app")
-                        break
-                    }
-                    delay(800) // Faster polling
-                }
-            } else {
-                Log.d(TAG, "Phase 1 Skipped: User was recently in UPI app")
-            }
-
-            if (!hasEnteredUpi) {
-                Log.d(TAG, "Phase 1 Timeout: No UPI activity detected")
-                isMonitoring = false
-                stopSelf()
-                return@launch
-            }
-
-            // Phase 2: Wait for exit
-            Log.d(TAG, "Phase 2: Monitoring for exit")
-            var exitConfirmedCount = 0
-            val requiredConfirmations = 1 // Immediate show on first non-UPI/non-interrupter detection
-            var retries = 0
-            val maxRetries = 200 // ~3 minutes
-
-            while (exitConfirmedCount < requiredConfirmations && retries < maxRetries) {
-                val currentApp = usageMonitor.getForegroundPackage()
-                
-                // If we can't determine app or it's an interrupter, just wait
-                if (currentApp == null || INTERRUPTER_PACKAGES.any { currentApp.contains(it) }) {
-                    delay(800)
-                    retries++
-                    continue
-                }
-
-                val isInUpi = UPI_PACKAGES.contains(currentApp) || currentApp == packageHint
-
-                if (!isInUpi) {
-                    exitConfirmedCount++
-                } else {
-                    exitConfirmedCount = 0 
-                }
-
-                delay(800)
-                retries++
-            }
-
-            isMonitoring = false
-            if (exitConfirmedCount >= requiredConfirmations) {
-                Log.d(TAG, "Phase 2 Complete: Exit detected. Showing overlay.")
-                showOverlay(amount, receiver, account)
-            } else {
-                Log.d(TAG, "Phase 2 Timeout.")
-                if (!overlayManager.isOverlayVisible()) stopSelf()
-            }
-        }
-    }
-
     private fun showOverlay(amount: Double, receiver: String, account: String?) {
+        if (overlayManager.isOverlayVisible()) return
+
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         manager?.notify(NOTIFICATION_ID, createNotification("Transaction annotation required - tap to open"))
 
@@ -234,6 +213,7 @@ class OverlayForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(appChangeReceiver)
         serviceScope.cancel()
         overlayManager.cleanup()
     }

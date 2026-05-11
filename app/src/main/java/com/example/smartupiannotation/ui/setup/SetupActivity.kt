@@ -37,6 +37,10 @@ class SetupActivity : AppCompatActivity() {
             PermissionUtils.openOverlaySettings(this)
         }
 
+        binding.btnAccessibilityPermission.setOnClickListener {
+            PermissionUtils.openAccessibilitySettings(this)
+        }
+
         binding.btnUsagePermission.setOnClickListener {
             PermissionUtils.openUsageStatsSettings(this)
         }
@@ -54,14 +58,16 @@ class SetupActivity : AppCompatActivity() {
     private fun updatePermissionStatus() {
         val hasNotification = PermissionUtils.isNotificationListenerEnabled(this)
         val hasOverlay = PermissionUtils.hasOverlayPermission(this)
+        val hasAccessibility = PermissionUtils.isAccessibilityServiceEnabled(this)
         val hasUsage = PermissionUtils.hasUsageStatsPermission(this)
         val hasContacts = PermissionUtils.hasContactsPermission(this)
 
         binding.btnNotificationPermission.isEnabled = !hasNotification
         binding.btnOverlayPermission.isEnabled = !hasOverlay
+        binding.btnAccessibilityPermission.isEnabled = !hasAccessibility
         binding.btnUsagePermission.isEnabled = !hasUsage
         binding.btnContactsPermission.isEnabled = !hasContacts
 
-        binding.btnContinue.isEnabled = hasNotification && hasOverlay && hasUsage && hasContacts
+        binding.btnContinue.isEnabled = hasNotification && hasOverlay && hasAccessibility && hasUsage && hasContacts
     }
 }
